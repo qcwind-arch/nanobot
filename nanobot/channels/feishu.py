@@ -145,11 +145,11 @@ class FeishuChannel(BaseChannel):
         except Exception as e:
             logger.warning(f"Error adding reaction: {e}")
 
-    async def _add_reaction(self, message_id: str, emoji_type: str = "THUMBSUP") -> None:
+    async def _add_reaction(self, message_id: str, emoji_type: str = "THINKING") -> None:
         """
         Add a reaction emoji to a message (non-blocking).
         
-        Common emoji types: THUMBSUP, OK, EYES, DONE, OnIt, HEART
+        Common emoji types: THUMBSUP, OK, EYES, DONE, OnIt, HEART,TYPING,THINKING
         """
         if not self._client or not Emoji:
             return
@@ -276,7 +276,7 @@ class FeishuChannel(BaseChannel):
             msg_type = message.message_type
             
             # Add reaction to indicate "seen"
-            await self._add_reaction(message_id, "THUMBSUP")
+            await self._add_reaction(message_id, "THINKING")
             
             # Parse message content
             if msg_type == "text":
