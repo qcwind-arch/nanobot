@@ -20,6 +20,8 @@ class LiteLLMProvider(LLMProvider):
     (see providers/registry.py) — no if-elif chains needed here.
     """
     
+    DEFAULT_MODEL = "anthropic/claude-opus-4-5"
+
     def __init__(
         self, 
         api_key: str | None = None, 
@@ -28,7 +30,7 @@ class LiteLLMProvider(LLMProvider):
         extra_headers: dict[str, str] | None = None,
     ):
         super().__init__(api_key, api_base)
-        self.default_model = default_model
+        self.default_model = (default_model or "").strip() or self.DEFAULT_MODEL
         self.extra_headers = extra_headers or {}
         
         # Detect gateway / local deployment from api_key and api_base
@@ -119,8 +121,11 @@ class LiteLLMProvider(LLMProvider):
         Returns:
             LLMResponse with content and/or tool calls.
         """
-        model = self._resolve_model(model or self.default_model)
-        
+        model = (model or self.default_model or "").strip() or self.DEFAULT_MODEL
+        model = self._resolve_model(model)
+        if not model:
+            model = self._resolve_model(self.DEFAULT_MODEL)
+
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,

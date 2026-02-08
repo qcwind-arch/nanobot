@@ -359,6 +359,7 @@ Config file: `~/.nanobot/config.json`
 | `moonshot` | LLM (Moonshot/Kimi) | [platform.moonshot.cn](https://platform.moonshot.cn) |
 | `zhipu` | LLM (Zhipu GLM) | [open.bigmodel.cn](https://open.bigmodel.cn) |
 | `vllm` | LLM (local, any OpenAI-compatible server) | — |
+| `ollama` | LLM (local, any OpenAI-compatible server) | — |
 
 <details>
 <summary><b>Adding a New Provider (Developer Guide)</b></summary>

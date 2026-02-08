@@ -81,6 +81,7 @@ class ProvidersConfig(BaseModel):
     gemini: ProviderConfig = Field(default_factory=ProviderConfig)
     moonshot: ProviderConfig = Field(default_factory=ProviderConfig)
     aihubmix: ProviderConfig = Field(default_factory=ProviderConfig)  # AiHubMix API gateway
+    ollama: ProviderConfig =  Field(default_factory=ProviderConfig) # 本地的ollma
 
 
 class GatewayConfig(BaseModel):
