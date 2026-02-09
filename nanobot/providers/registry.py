@@ -300,7 +300,9 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         detect_by_base_keyword="",
         default_api_base="http://localhost:11434/v1",
         strip_model_prefix=False,
-        model_overrides=(),
+        model_overrides=(
+            ("qwen3:8b",{"temperature":0.1})
+        ),
     ),
 )
 
