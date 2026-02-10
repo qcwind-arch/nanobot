@@ -219,8 +219,8 @@ class LiteLLMProvider(LLMProvider):
          # 计算当前messages的token数
         messages_tokens = self._count_messages_tokens(messages)
         # 如果token数超过n_ctx，截断
-        if messages_tokens > max_tokens:
-            messages = self._truncate_long_messages(messages, max_tokens)
+        # if messages_tokens > max_tokens:
+            # messages = self._truncate_long_messages(messages, max_tokens)
 
         # print(f"n_ctx: {max_tokens}, messages_tokens: {messages_tokens}, condation: { messages_tokens > max_tokens }")
 
