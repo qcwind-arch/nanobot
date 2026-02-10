@@ -34,7 +34,11 @@ class MessageTool(Tool):
     
     @property
     def description(self) -> str:
-        return "Send a message to the user. Use this when you want to communicate something."
+        return (
+            "Send a message to the user. "
+            "Supports optional media such as images and files "
+            "(URLs, local file paths, or channel-specific media keys)."
+        )
     
     @property
     def parameters(self) -> dict[str, Any]:
@@ -52,6 +56,24 @@ class MessageTool(Tool):
                 "chat_id": {
                     "type": "string",
                     "description": "Optional: target chat/user ID"
+                },
+                "media": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Optional: list of media items to send. "
+                        "For Feishu, items can be image URLs, file URLs, "
+                        "local image/file paths, Feishu image_keys or file_keys."
+                    )
+                },
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Optional: list of files to send. "
+                        "Typically file URLs or local file paths. "
+                        "For Feishu, these will be treated as files and uploaded if needed."
+                    )
                 }
             },
             "required": ["content"]
@@ -62,6 +84,8 @@ class MessageTool(Tool):
         content: str, 
         channel: str | None = None, 
         chat_id: str | None = None,
+        media: list[str] | None = None,
+        files: list[str] | None = None,
         **kwargs: Any
     ) -> str:
         channel = channel or self._default_channel
@@ -73,10 +97,18 @@ class MessageTool(Tool):
         if not self._send_callback:
             return "Error: Message sending not configured"
         
+        # Combine generic media and explicit files for backwards compatibility
+        combined_media: list[str] = []
+        if media:
+            combined_media.extend(media)
+        if files:
+            combined_media.extend(files)
+        
         msg = OutboundMessage(
             channel=channel,
             chat_id=chat_id,
-            content=content
+            content=content,
+            media=combined_media,
         )
         
         try:
