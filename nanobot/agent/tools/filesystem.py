@@ -1,4 +1,4 @@
-"""File system tools: remove,read, write, edit."""
+"""File system tools: remove, read, write, edit."""
 
 from pathlib import Path
 from typing import Any
@@ -15,7 +15,7 @@ def _resolve_path(path: str, allowed_dir: Path | None = None) -> Path:
 
 
 class RemoveFileTool(Tool):
-    """Tool to remove file."""
+    """Tool to remove a file."""
     
     def __init__(self, allowed_dir: Path | None = None):
         self._allowed_dir = allowed_dir
