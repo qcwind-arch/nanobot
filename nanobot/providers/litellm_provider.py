@@ -36,8 +36,6 @@ class LiteLLMProvider(LLMProvider):
         self.default_model = (default_model or "").strip() or self.DEFAULT_MODEL
         self.extra_headers = extra_headers or {}
         
-<<<<<<< HEAD
-        # Detect gateway / local deployment from api_key and api_base
         self._gateway = find_gateway(api_key, api_base)
         
         # Backwards-compatible flags (used by tests and possibly external code)
@@ -52,12 +50,6 @@ class LiteLLMProvider(LLMProvider):
             # 兜底：如果cl100k_base不存在，用gpt2编码器
             self.encoder = tiktoken.encoding_for_model("gpt-3.5-turbo")
             # print(f"编码器初始化警告：{e}，已切换为gpt-3.5-turbo编码器")
-=======
-        # Detect gateway / local deployment.
-        # provider_name (from config key) is the primary signal;
-        # api_key / api_base are fallback for auto-detection.
-        self._gateway = find_gateway(provider_name, api_key, api_base)
->>>>>>> upstream/main
         
         # Configure environment variables
         if api_key:
