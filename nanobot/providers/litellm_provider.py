@@ -253,6 +253,8 @@ class LiteLLMProvider(LLMProvider):
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
 
+        print(kwargs)
+
         try:
             response = await acompletion(**kwargs)
             return self._parse_response(response)
