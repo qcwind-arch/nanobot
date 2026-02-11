@@ -546,7 +546,7 @@ class FeishuChannel(BaseChannel):
             
             # Add reaction to indicate "seen"
             await self._add_reaction(message_id, "THINKING")
-            
+
             # Parse message content and media
             media: list[str] = []
             if msg_type == "text":
