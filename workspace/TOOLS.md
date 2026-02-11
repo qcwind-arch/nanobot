@@ -4,6 +4,12 @@ This document describes the tools available to nanobot.
 
 ## File Operations
 
+### remove_file
+Remove a file.
+```
+remove_file(path: str) -> str
+```
+
 ### read_file
 Read the contents of a file.
 ```
