@@ -157,6 +157,16 @@ class AgentLoop:
         if msg.channel == "system":
             return await self._process_system_message(msg)
         
+        # Special command: clear session context with "/clear"
+        if msg.content.strip() == "/clear":
+            self.sessions.delete(msg.session_key)
+            logger.info(f"Session cleared for {msg.session_key}")
+            return OutboundMessage(
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                content="已清除当前会话上下文（session has been cleared）。",
+            )
+        
         preview = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
         logger.info(f"Processing message from {msg.channel}:{msg.sender_id}: {preview}")
         

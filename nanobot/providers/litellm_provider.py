@@ -253,7 +253,7 @@ class LiteLLMProvider(LLMProvider):
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
 
-        print(kwargs)
+        # print(kwargs)
 
         try:
             response = await acompletion(**kwargs)
