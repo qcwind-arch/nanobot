@@ -18,6 +18,13 @@ from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import FeishuConfig
 
+import warnings
+# 屏蔽pkg_resources相关的UserWarning
+warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
+# 或精准屏蔽lark_oapi的警告
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API", module="lark_oapi")
+
+
 try:
     import lark_oapi as lark
     from lark_oapi.api.im.v1 import (
