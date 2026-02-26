@@ -18,9 +18,6 @@ __pycache__/
 poetry.lock
 .pytest_cache/
 tests/
-<<<<<<< HEAD
 package-lock.json
-=======
-botpy.log
->>>>>>> upstream/main
 package.json
+venv
