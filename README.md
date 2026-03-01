@@ -459,7 +459,7 @@ nanobot gateway
 > [!TIP]
 > Feishu uses WebSocket to receive messages — no webhook or public IP needed!
 
-<img src="case/feishu.png" width="180" height="400">
+<img src="case/feishu.png" width="100%">
 
 </details>
 
