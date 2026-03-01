@@ -1,4 +1,4 @@
-"""File system tools: remove, read, write, edit."""
+"""File system tools: read, write, edit."""
 
 import difflib
 from pathlib import Path
@@ -20,47 +20,6 @@ def _resolve_path(path: str, workspace: Path | None = None, allowed_dir: Path | 
             raise PermissionError(f"Path {path} is outside allowed directory {allowed_dir}")
     return resolved
 
-
-class RemoveFileTool(Tool):
-    """Tool to remove a file."""
-    
-    def __init__(self, allowed_dir: Path | None = None):
-        self._allowed_dir = allowed_dir
-
-    @property
-    def name(self) -> str:
-        return "remove_file"
-    
-    @property
-    def description(self) -> str:
-        return "Remove a file at the given path."
-    
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "The file path to remove"
-                }
-            },
-            "required": ["path"]
-        }
-    
-    async def execute(self, path: str, **kwargs: Any) -> str:
-        file_path = _resolve_path(path, self._allowed_dir)
-        try:
-            file_path.unlink()
-            return f"Successfully remove file path{file_path}"
-        except FileNotFoundError:
-            # 捕获文件不存在的异常
-             return f"Error: File not found: {file_path}"
-        except PermissionError as e:
-            return f"Error: {e}"
-        except Exception as e:
-            return f"Error remove file: {str(e)}"
-            
 
 class ReadFileTool(Tool):
     """Tool to read file contents."""

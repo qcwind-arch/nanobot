@@ -1,15 +1,23 @@
-# 长期记忆
-此文件存储应在不同会话之间保持的重要信息。
+# Long-term Memory
 
+This file stores important information that should persist across sessions.
 
-## 用户信息
+## User Information
 
-我是一个程序员，开发技术栈包含Java、Python、Php、C++等。
+(Important facts about the user)
 
-## 用户偏好设置
+## Preferences
 
-- **保单同步**: 不用建议直接运营，这个是用户的工作
-- **语言**: 尽量使用中文，除了有特殊要求
+(User preferences learned over time)
 
+## Project Context
 
-## 重要笔记
+(Information about ongoing projects)
+
+## Important Notes
+
+(Things to remember)
+
+---
+
+*This file is automatically updated by nanobot when important information should be remembered.*
