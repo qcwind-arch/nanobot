@@ -617,8 +617,8 @@ class FeishuChannel(BaseChannel):
                             if key:
                                 audio_duration[key] = get_audio_duration_seconds(local_candidate)
                                 audio_keys.append(key)
-                                print(key)
-                                print(audio_duration[key])
+                                # print(key)
+                                # print(audio_duration[key])
                             else:
                                 logger.error(f"Failed to upload local audio file: {item}")
                         else:
