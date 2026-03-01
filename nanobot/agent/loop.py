@@ -358,6 +358,16 @@ class AgentLoop:
 
         # Slash commands
         cmd = msg.content.strip().lower()
+
+        if cmd == "/clear":
+            self.sessions.delete(msg.session_key)
+            logger.info(f"Session cleared for {msg.session_key}")
+            return OutboundMessage(
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                content="已清除当前会话上下文（session has been cleared）。",
+            )
+
         if cmd == "/new":
             lock = self._consolidation_locks.setdefault(session.key, asyncio.Lock())
             self._consolidating.add(session.key)

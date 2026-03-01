@@ -233,6 +233,8 @@ class LiteLLMProvider(LLMProvider):
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
         
+        print(json.dumps(kwargs))
+
         try:
             response = await acompletion(**kwargs)
             return self._parse_response(response)
