@@ -368,6 +368,13 @@ class AgentLoop:
                 content="已清除当前会话上下文（session has been cleared）。",
             )
 
+        if cmd =="/openid":
+            return OutboundMessage(
+                channel=msg.channel,
+                chat_id=msg.chat_id,
+                content=f"{msg.sender_id}",
+            )
+            
         if cmd == "/new":
             lock = self._consolidation_locks.setdefault(session.key, asyncio.Lock())
             self._consolidating.add(session.key)

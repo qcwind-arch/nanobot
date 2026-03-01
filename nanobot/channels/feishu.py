@@ -732,6 +732,16 @@ class FeishuChannel(BaseChannel):
         except Exception as e:
             logger.error(f"Error sending Feishu message: {e}")
     
+    def _to_serializable(self, o: Any) -> Any:
+        """Recursively convert lark_oapi model to JSON-serializable dict."""
+        if hasattr(o, "__dict__") and not isinstance(o, type):
+            return {k: self._to_serializable(v) for k, v in vars(o).items()}
+        if isinstance(o, dict):
+            return {k: self._to_serializable(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [self._to_serializable(x) for x in o]
+        return o
+
     def _on_message_sync(self, data: "P2ImMessageReceiveV1") -> None:
         """
         Sync handler for incoming messages (called from WebSocket thread).
@@ -743,10 +753,11 @@ class FeishuChannel(BaseChannel):
     async def _on_message(self, data: "P2ImMessageReceiveV1") -> None:
         """Handle incoming message from Feishu."""
         try:
+            # logger.debug(f"_on_message data: {json.dumps(self._to_serializable(data), indent=2, ensure_ascii=False, default=str)}")
             event = data.event
             message = event.message
             sender = event.sender
-            
+
             # Deduplication check
             message_id = message.message_id
             if message_id in self._processed_message_ids:
@@ -763,6 +774,7 @@ class FeishuChannel(BaseChannel):
                 return
             
             sender_id = sender.sender_id.open_id if sender.sender_id else "unknown"
+            union_id = sender.sender_id.union_id if sender.sender_id else "unknown"
             chat_id = message.chat_id
             chat_type = message.chat_type  # "p2p" or "group"
             msg_type = message.message_type
