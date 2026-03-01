@@ -45,6 +45,13 @@ except ImportError:
     lark = None
     Emoji = None
 
+try:
+    import mutagen
+    MUTAGEN_AVAILABLE = True
+except ImportError:
+    MUTAGEN_AVAILABLE = False
+    mutagen = None
+
 # Message type display mapping
 MSG_TYPE_MAP = {
     "image": "[image]",
@@ -52,6 +59,86 @@ MSG_TYPE_MAP = {
     "file": "[file]",
     "sticker": "[sticker]",
 }
+
+
+def _get_opus_duration_from_ogg(path: str) -> float | None:
+    """
+    Parse Ogg container to get duration from granule position (no mutagen).
+    Opus uses 48000 Hz clock; granule position = total samples.
+    """
+    path = os.path.expanduser(path)
+    try:
+        with open(path, "rb") as f:
+            # Ogg page: "OggS" (4) + version(1) + header_type(1) + granule_position(8 LE) + ...
+            granule = 0
+            while True:
+                header = f.read(28)
+                if len(header) < 28:
+                    break
+                if header[:4] != b"OggS":
+                    break
+                granule = int.from_bytes(header[6:14], "little")
+                num_segments = header[26]
+                if num_segments <= 0:
+                    break
+                seg_table = f.read(num_segments)
+                if len(seg_table) < num_segments:
+                    break
+                page_bytes = sum(seg_table)
+                if page_bytes > 0:
+                    f.seek(page_bytes, 1)
+            if granule <= 0:
+                return None
+            # Opus: 48000 Hz reference; duration = samples / 48000
+            return granule / 48000.0
+    except (OSError, ValueError):
+        return None
+
+
+def get_audio_duration_seconds(path: str) -> float | None:
+    """
+    Get duration of an audio file in seconds.
+    For .opus/.ogg uses built-in Ogg parsing (no extra deps).
+    For mp3/m4a/wav uses mutagen when available.
+
+    Returns:
+        Duration in seconds, or None if unknown.
+    """
+    path = os.path.expanduser(path)
+    if not os.path.isfile(path):
+        return None
+    ext = os.path.splitext(path)[1].lower()
+
+    if ext in (".opus", ".ogg"):
+        duration = _get_opus_duration_from_ogg(path)
+        if duration is not None:
+            return duration
+        if MUTAGEN_AVAILABLE and mutagen:
+            try:
+                f = mutagen.File(path)
+                if f is not None and hasattr(f, "info") and hasattr(f.info, "length"):
+                    return float(f.info.length)
+            except Exception:
+                pass
+        return None
+
+    if MUTAGEN_AVAILABLE and mutagen:
+        try:
+            if ext == ".mp3":
+                f = mutagen.mp3.MP3(path)
+                return f.info.length if f.info else None
+            if ext in (".m4a", ".aac", ".mp4"):
+                f = mutagen.mp4.MP4(path)
+                return f.info.length if f.info else None
+            if ext == ".wav":
+                f = mutagen.wave.WAVE(path)
+                return f.info.length if f.info else None
+            f = mutagen.File(path)
+            if f is not None and hasattr(f, "info") and hasattr(f.info, "length"):
+                return float(f.info.length)
+        except Exception:
+            pass
+    return None
 
 
 class FeishuChannel(BaseChannel):
@@ -258,25 +345,25 @@ class FeishuChannel(BaseChannel):
                 req = CreateFileRequest.builder() \
                     .request_body(
                         CreateFileRequestBody.builder()
-                        .file_type("stream")  # generic file type
+                        .file_type("opus")  # generic file type
                         .file_name(file_name)
                         .file(f)
                         .build()
                     ).build()
                 resp = self._client.im.v1.file.create(req)
         except Exception as e:
-            logger.error(f"Failed to upload file {path} to Feishu: {e}")
+            logger.error(f"Failed to upload audio file {path} to Feishu: {e}")
             return None
         
         if not resp.success():
             logger.error(
-                f"Failed to upload file to Feishu: code={resp.code}, "
+                f"Failed to upload audio file to Feishu: code={resp.code}, "
                 f"msg={resp.msg}, log_id={resp.get_log_id()}"
             )
             return None
         file_key = getattr(resp.data, "file_key", None)
         if not file_key:
-            logger.error("Feishu file upload succeeded but no file_key returned")
+            logger.error("Feishu audio file upload succeeded but no file_key returned")
         return file_key.replace("file_", "audio_")
 
     def _upload_file_from_url(self, url: str) -> str | None:
@@ -326,7 +413,7 @@ class FeishuChannel(BaseChannel):
 
     def _upload_audio_from_url(self, url: str) -> str | None:
         """
-        Download a file from URL and upload to Feishu, returning file_key.
+        Download a audio file from URL and upload to Feishu, returning file_key.
         """
         if not self._client:
             return None
@@ -335,7 +422,7 @@ class FeishuChannel(BaseChannel):
             with urlopen(url) as resp:
                 data = resp.read()
         except Exception as e:
-            logger.error(f"Failed to download file from URL {url}: {e}")
+            logger.error(f"Failed to download audio file from URL {url}: {e}")
             return None
         
         parsed = urlparse(url)
@@ -346,7 +433,7 @@ class FeishuChannel(BaseChannel):
             req = CreateFileRequest.builder() \
                 .request_body(
                     CreateFileRequestBody.builder()
-                    .file_type("stream")
+                    .file_type("opus")
                     .file_name(file_name)
                     .file(file_io)
                     .build()
@@ -354,19 +441,19 @@ class FeishuChannel(BaseChannel):
             
             resp = self._client.im.v1.file.create(req)
         except Exception as e:
-            logger.error(f"Failed to upload file from URL {url} to Feishu: {e}")
+            logger.error(f"Failed to upload audio file from URL {url} to Feishu: {e}")
             return None
         
         if not resp.success():
             logger.error(
-                f"Failed to upload URL file to Feishu: code={resp.code}, "
+                f"Failed to upload URL audio file to Feishu: code={resp.code}, "
                 f"msg={resp.msg}, log_id={resp.get_log_id()}"
             )
             return None
         
         file_key = getattr(resp.data, "file_key", None)
         if not file_key:
-            logger.error("Feishu URL file upload succeeded but no file_key returned")
+            logger.error("Feishu URL audio file upload succeeded but no file_key returned")
         return file_key.replace("file_", "audio_")
     
     def _add_reaction_sync(self, message_id: str, emoji_type: str) -> None:
@@ -493,6 +580,7 @@ class FeishuChannel(BaseChannel):
             image_keys: list[str] = []
             audio_keys: list[str] = []
             file_keys: list[str] = []
+            audio_duration: dict[str, float] = {}
             for item in msg.media or []:
                 if not item:
                     continue
@@ -527,7 +615,10 @@ class FeishuChannel(BaseChannel):
                         elif ext in audio_exts:
                             key = self._upload_audio_from_path(local_candidate)
                             if key:
+                                audio_duration[key] = get_audio_duration_seconds(local_candidate)
                                 audio_keys.append(key)
+                                print(key)
+                                print(audio_duration[key])
                             else:
                                 logger.error(f"Failed to upload local audio file: {item}")
                         else:
@@ -611,7 +702,12 @@ class FeishuChannel(BaseChannel):
                 if not audio_key:
                     continue
                 try:
-                    audio_content = json.dumps({"file_key": audio_key.replace("audio_", "file_")}, ensure_ascii=False)
+                    duration = int(audio_duration.get(audio_key) or 0)
+                    duration = int(duration * 1000)
+                    audio_content = json.dumps({"file_key": audio_key.replace("audio_", "file_"), "duration": duration}, ensure_ascii=False)
+                    # print(audio_key)
+                    # print(audio_duration[audio_key])
+                    # print(audio_content)
                     audio_request = CreateMessageRequest.builder() \
                         .receive_id_type(receive_id_type) \
                         .request_body(
