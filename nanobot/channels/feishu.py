@@ -3,10 +3,12 @@
 import asyncio
 import io
 import json
+import mimetypes
 import os
 import re
 import threading
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -17,6 +19,8 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import FeishuConfig
+from nanobot.config.loader import load_config, get_data_dir
+from nanobot.utils.helpers import safe_filename
 
 import warnings
 # 屏蔽pkg_resources相关的UserWarning
@@ -38,6 +42,9 @@ try:
         CreateMessageReactionRequestBody,
         Emoji,
         P2ImMessageReceiveV1,
+        GetFileRequest,
+        GetImageRequest,
+        GetMessageResourceRequest,
     )
     FEISHU_AVAILABLE = True
 except ImportError:
@@ -163,6 +170,21 @@ class FeishuChannel(BaseChannel):
         self._ws_thread: threading.Thread | None = None
         self._processed_message_ids: OrderedDict[str, None] = OrderedDict()  # Ordered dedup cache
         self._loop: asyncio.AbstractEventLoop | None = None
+
+    @staticmethod
+    def _workspace_tmp_dir() -> Path:
+        """
+        Resolve the workspace tmp directory.
+
+        In Cursor/dev mode this resolves to repo root /tmp. For runtime installs, this may
+        resolve to the installed package location; users can still symlink or override cwd.
+        """
+        config = load_config()
+        workspace_root = config.workspace_path
+        tmp_dir = workspace_root / "tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        return tmp_dir
+
     
     async def start(self) -> None:
         """Start the Feishu bot with WebSocket long connection."""
@@ -226,7 +248,63 @@ class FeishuChannel(BaseChannel):
             except Exception as e:
                 logger.warning(f"Error stopping WebSocket client: {e}")
         logger.info("Feishu bot stopped")
-    
+
+    def _download_image_to_tmp(self, image_key: str, message_id: str | None = None) -> str | None:
+        """Download a Feishu image by image_key to workspace tmp/ and return local path."""
+        if not self._client or not FEISHU_AVAILABLE:
+            return None
+
+        try:
+            # req = GetImageRequest.builder().image_key(image_key).build()
+            req = GetMessageResourceRequest.builder() \
+                .message_id(message_id) \
+                .file_key(image_key) \
+                .type("image") \
+                .build()
+            # Feishu expects type=message for message images; harmless if ignored by server.
+            # req.add_query("type", "message")
+            resp = self._client.im.v1.message_resource.get(req)
+        except Exception as e:
+            logger.error(f"Failed to fetch Feishu image {image_key}: {e}")
+            return None
+
+        if not resp.success():
+            logger.error(
+                f"Failed to download Feishu image: code={resp.code}, msg={resp.msg}, "
+                f"log_id={resp.get_log_id()}"
+            )
+            return None
+
+
+        raw = getattr(resp, "raw", None)
+        data = getattr(raw, "content", None) if raw else None
+        headers = getattr(raw, "headers", {}) if raw else {}
+        if not data:
+            logger.error(f"Feishu image response empty for image_key={image_key}")
+            return None
+
+        content_type = (headers.get("Content-Type") or headers.get("content-type") or "").split(";")[0].strip()
+        ext = mimetypes.guess_extension(content_type) if content_type else None
+        if not ext:
+            # Reasonable default: Feishu commonly returns jpeg.
+            ext = ".jpg"
+
+        mid = safe_filename(message_id or "no_message_id")
+        ik = safe_filename(image_key)
+        base = f"feishu_{mid}_{ik}"
+        tmp_dir = self._workspace_tmp_dir()
+        path = tmp_dir / f"{base}{ext}"
+
+        try:
+            path.write_bytes(data)
+        except Exception as e:
+            logger.error(f"Failed to write image to {path}: {e}")
+            return None
+
+        # logger.info(f"Downloaded Feishu image to {path}")
+        return str(path)
+
+
     def _upload_image_from_url(self, url: str) -> str | None:
         """
         Download an image from URL and upload to Feishu to get image_key.
@@ -779,11 +857,14 @@ class FeishuChannel(BaseChannel):
             chat_type = message.chat_type  # "p2p" or "group"
             msg_type = message.message_type
             
+            # print(sender_id)
             # Add reaction to indicate "seen"
             await self._add_reaction(message_id, "THINKING")
 
             # Parse message content and media
             media: list[str] = []
+            downloaded_images: list[str] = []
+            image_key: str | None = None
             if msg_type == "text":
                 try:
                     content = json.loads(message.content).get("text", "")
@@ -795,10 +876,21 @@ class FeishuChannel(BaseChannel):
                     data = json.loads(message.content) if message.content else {}
                 except json.JSONDecodeError:
                     data = {}
-                image_key = data.get("image_key")
+                image_key = data.get("image_key") if isinstance(data, dict) else None
+                # print(json.dumps(data, indent=2, ensure_ascii=False))
                 if image_key:
-                    media.append(image_key)
-                content = MSG_TYPE_MAP.get("image", "[image]")
+                    local_path = self._download_image_to_tmp(image_key=image_key, message_id=message_id)
+                    # print(local_path)
+                    if local_path:
+                        # Don't put local image paths into media: ContextBuilder may inline images as base64
+                        # and exceed model context limits.
+                        downloaded_images.append(local_path)
+                        content = [{"type": "image_url", "image_url": f"{local_path}"}]
+                    else:
+                        media.append(image_key)
+                        content = [{"type": "image_key", "image_key":f"{image_key}"}]
+                    content = json.dumps(content)
+                # content = MSG_TYPE_MAP.get("image", "[image]")
             elif msg_type == "file":
                 # Feishu file message content is JSON like: {"file_key": "...", "file_name": "...", ...}
                 try:
@@ -828,7 +920,8 @@ class FeishuChannel(BaseChannel):
                     "msg_type": msg_type,
                     # Channel-specific payload for consumers that need raw image keys, etc.
                     "raw_content": message.content,
-                    "image_keys": media if msg_type == "image" and media else None,
+                    "image_keys": [image_key] if msg_type == "image" and image_key else None,
+                    "downloaded_images": downloaded_images if msg_type == "image" and downloaded_images else None,
                     "file_keys": media if msg_type == "file" and media else None,
                 }
             )

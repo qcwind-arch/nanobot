@@ -21,6 +21,7 @@ from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.spawn import SpawnTool
+from nanobot.agent.tools.user import UserTool
 from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
@@ -124,6 +125,7 @@ class AgentLoop:
         self.tools.register(WebFetchTool())
         self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
         self.tools.register(SpawnTool(manager=self.subagents))
+        self.tools.register(UserTool())
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
 
@@ -149,12 +151,29 @@ class AgentLoop:
         finally:
             self._mcp_connecting = False
 
-    def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
+    def _set_tool_context(
+        self,
+        channel: str,
+        chat_id: str,
+        message_id: str | None = None,
+        sender_id: str | None = None,
+    ) -> None:
         """Update context for all tools that need routing info."""
-        for name in ("message", "spawn", "cron"):
+        # Message tool needs channel/chat_id/message_id
+        if tool := self.tools.get("message"):
+            if hasattr(tool, "set_context"):
+                tool.set_context(channel, chat_id, message_id)
+
+        # Spawn/cron tools need channel/chat_id for where to send follow-ups
+        for name in ("spawn", "cron"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
-                    tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))
+                    tool.set_context(channel, chat_id)
+
+        # User tool needs channel/chat_id/sender_id to expose user identifiers (e.g. Feishu open_id)
+        if tool := self.tools.get("user"):
+            if hasattr(tool, "set_context"):
+                tool.set_context(channel, chat_id, sender_id)
 
     @staticmethod
     def _strip_think(text: str | None) -> str | None:
@@ -290,6 +309,7 @@ class AgentLoop:
 
     async def _dispatch(self, msg: InboundMessage) -> None:
         """Process a message under the global lock."""
+        # print(msg)
         async with self._processing_lock:
             try:
                 response = await self._process_message(msg)
@@ -338,11 +358,12 @@ class AgentLoop:
             logger.info("Processing system message from {}", msg.sender_id)
             key = f"{channel}:{chat_id}"
             session = self.sessions.get_or_create(key)
-            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
+            # For system messages, sender_id is the original user id / open_id
+            self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"), msg.sender_id)
             history = session.get_history(max_messages=self.memory_window)
             messages = self.context.build_messages(
                 history=history,
-                current_message=msg.content, channel=channel, chat_id=chat_id,
+                current_message=msg.content, channel=channel, chat_id=chat_id
             )
             final_content, _, all_msgs = await self._run_agent_loop(messages)
             self._save_turn(session, all_msgs, 1 + len(history))
@@ -425,17 +446,36 @@ class AgentLoop:
             _task = asyncio.create_task(_consolidate_and_unlock())
             self._consolidation_tasks.add(_task)
 
-        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"))
+        # Normal inbound messages: sender_id is the current end user id (e.g. Feishu open_id)
+        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"), msg.sender_id)
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
 
         history = session.get_history(max_messages=self.memory_window)
+        # files = msg.downloaded_images
+        # Step 1: Extract downloaded_images with explicit checks (add debug logs)
+        # Get metadata (handle both dict and object cases)
+        metadata = msg.metadata if hasattr(msg, "metadata") else {}
+        # Convert metadata to dict if it's an object (common in SDKs)
+        metadata_dict = vars(metadata) if not isinstance(metadata, dict) else metadata
+
+        # Extract downloaded_images (fallback to empty list instead of None)
+        downloaded_images = metadata_dict.get("downloaded_images", [])
+        logger.debug(f"downloaded_images raw value: {downloaded_images}")  # Debug log
+
+        # Step 2: Sanitize the files parameter (ensure it's a list of valid paths)
+        files = []
+        if downloaded_images and isinstance(downloaded_images, list):
+            # Filter out empty/invalid paths (e.g., "", None, broken paths)
+            files = [path for path in downloaded_images if path and isinstance(path, str)]
+
         initial_messages = self.context.build_messages(
             history=history,
             current_message=msg.content,
             media=msg.media if msg.media else None,
             channel=msg.channel, chat_id=msg.chat_id,
+            # files=files,
         )
 
         async def _bus_progress(content: str, *, tool_hint: bool = False) -> None:

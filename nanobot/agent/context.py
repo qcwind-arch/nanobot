@@ -17,6 +17,10 @@ class ContextBuilder:
     
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
     _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
+    # Inlining local images as base64 can easily exceed model/context payload limits.
+    # Keep this conservative; channels should prefer sending a remote URL if available.
+    MAX_INLINE_IMAGES = 1
+    MAX_INLINE_IMAGE_BYTES = 64 * 1024
     
     def __init__(self, workspace: Path):
         self.workspace = workspace
@@ -78,6 +82,12 @@ Your workspace is at: {workspace_path}
 - If a tool call fails, analyze the error before retrying with a different approach.
 - Ask for clarification when the request is ambiguous.
 
+## User
+
+You are a helpful assistant. You can use the following tools to help you with your tasks:
+
+- Get channel, chat_id, user_id, openid: use the tool of UserTool.
+
 Reply directly with text for conversations. Only use the 'message' tool to send to a specific chat channel."""
 
     @staticmethod
@@ -110,13 +120,18 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
         media: list[str] | None = None,
         channel: str | None = None,
         chat_id: str | None = None,
+        files: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Build the complete message list for an LLM call."""
+
+        context = {"role": "user", "content": self._build_user_content(current_message, media)}
+        if(files is not None and len(files) > 0):
+            context["files"] = files
         return [
             {"role": "system", "content": self.build_system_prompt(skill_names)},
             *history,
             {"role": "user", "content": self._build_runtime_context(channel, chat_id)},
-            {"role": "user", "content": self._build_user_content(current_message, media)},
+            context,
         ]
 
     def _build_user_content(self, text: str, media: list[str] | None) -> str | list[dict[str, Any]]:
@@ -125,14 +140,38 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
             return text
         
         images = []
+        omitted: list[str] = []
         for path in media:
             p = Path(path)
             mime, _ = mimetypes.guess_type(path)
             if not p.is_file() or not mime or not mime.startswith("image/"):
                 continue
-            b64 = base64.b64encode(p.read_bytes()).decode()
+            try:
+                size = p.stat().st_size
+            except OSError:
+                omitted.append(f"[image omitted: {p.name} - stat failed]")
+                continue
+
+            if len(images) >= self.MAX_INLINE_IMAGES:
+                omitted.append(f"[image omitted: {p.name} - too many images]")
+                continue
+
+            if size > self.MAX_INLINE_IMAGE_BYTES:
+                omitted.append(
+                    f"[image omitted: {p.name} - {size} bytes exceeds {self.MAX_INLINE_IMAGE_BYTES} bytes limit]"
+                )
+                continue
+
+            try:
+                b64 = base64.b64encode(p.read_bytes()).decode()
+            except OSError:
+                omitted.append(f"[image omitted: {p.name} - read failed]")
+                continue
+
             images.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
         
+        if omitted:
+            text = (text + "\n\n" + "\n".join(omitted)).strip()
         if not images:
             return text
         return images + [{"type": "text", "text": text}]

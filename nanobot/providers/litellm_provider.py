@@ -16,7 +16,7 @@ from nanobot.providers.registry import find_by_model, find_gateway
 
 # Standard OpenAI chat-completion message keys plus reasoning_content for
 # thinking-enabled models (Kimi k2.5, DeepSeek-R1, etc.).
-_ALLOWED_MSG_KEYS = frozenset({"role", "content", "tool_calls", "tool_call_id", "name", "reasoning_content", "thinking_blocks"})
+_ALLOWED_MSG_KEYS = frozenset({"role", "content", "tool_calls", "tool_call_id", "files", "name", "reasoning_content", "thinking_blocks"})
 _ALNUM = string.ascii_letters + string.digits
 
 def _short_tool_id() -> str:

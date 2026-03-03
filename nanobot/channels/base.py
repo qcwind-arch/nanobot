@@ -112,7 +112,7 @@ class BaseChannel(ABC):
                 sender_id, self.name,
             )
             return
-        
+
         msg = InboundMessage(
             channel=self.name,
             sender_id=str(sender_id),
