@@ -46,6 +46,8 @@ class ContextBuilder:
                 parts.append(f"# Active Skills\n\n{always_content}")
 
         skills_summary = self.skills.build_skills_summary()
+        
+        # print(skills_summary)
         if skills_summary:
             parts.append(f"""# Skills
 
