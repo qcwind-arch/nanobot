@@ -21,6 +21,50 @@ def _resolve_path(path: str, workspace: Path | None = None, allowed_dir: Path | 
     return resolved
 
 
+# class OcrPictureTool(Tool):
+#     """Tool to ocr picture contents."""
+
+#     def __init__(self, workspace: Path | None = None, allowed_dir: Path | None = None):
+#         self._workspace = workspace
+#         self._allowed_dir = allowed_dir
+
+#     @property
+#     def name(self) -> str:
+#         return "ocr_file"
+    
+#     @property
+#     def description(self) -> str:
+#         return "Ocr the contents of a picture at the given path."
+    
+#     @property
+#     def parameters(self) -> dict[str, Any]:
+#         return {
+#             "type": "object",
+#             "properties": {
+#                 "path": {
+#                     "type": "string",
+#                     "description": "The picture path to ocr"
+#                 }
+#             },
+#             "required": ["path"]
+#         }
+    
+#     async def execute(self, path: str, **kwargs: Any) -> str:
+#         try:
+#             file_path = _resolve_path(path, self._workspace, self._allowed_dir)
+#             if not file_path.exists():
+#                 return f"Error: File not found: {path}"
+#             if not file_path.is_file():
+#                 return f"Error: Not a file: {path}"
+
+#             content = file_path.read_text(encoding="utf-8")
+#             return content
+#         except PermissionError as e:
+#             return f"Error: {e}"
+#         except Exception as e:
+#             return f"Error reading file: {str(e)}"
+
+
 class ReadFileTool(Tool):
     """Tool to read file contents."""
 
