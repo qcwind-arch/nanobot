@@ -241,7 +241,8 @@ class FeishuConfig(Base):
     encrypt_key: str = ""
     verification_token: str = ""
     allow_from: list[str] = Field(default_factory=list)
-    react_emoji: str = "THUMBSUP"
+    # react_emoji: str = "THUMBSUP"
+    react_emoji: str = "THINKING"
     group_policy: Literal["open", "mention"] = "mention"
     reply_to_message: bool = False  # If True, bot replies quote the user's original message
 
