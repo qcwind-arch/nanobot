@@ -1,12 +1,13 @@
+.worktrees/
 .assets
+.docs
 .env
 *.pyc
 dist/
 build/
-docs/
 *.egg-info/
 *.egg
-*.pyc
+*.pycs
 *.pyo
 *.pyd
 *.pyw
@@ -17,7 +18,14 @@ docs/
 __pycache__/
 poetry.lock
 .pytest_cache/
+<<<<<<< HEAD
 tests/
 package-lock.json
 package.json
 venv
+=======
+botpy.log
+nano.*.save
+.DS_Store
+uv.lock
+>>>>>>> upstream/main
