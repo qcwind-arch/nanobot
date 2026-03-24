@@ -18,14 +18,8 @@ build/
 __pycache__/
 poetry.lock
 .pytest_cache/
-<<<<<<< HEAD
-tests/
-package-lock.json
-package.json
-venv
-=======
 botpy.log
 nano.*.save
 .DS_Store
 uv.lock
->>>>>>> upstream/main
+tests/
