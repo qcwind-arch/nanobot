@@ -281,6 +281,8 @@ class LiteLLMProvider(LLMProvider):
             kwargs["tools"] = tools
             kwargs["tool_choice"] = tool_choice or "auto"
 
+        print(kwargs)
+
         return kwargs, original_model
 
     async def chat(
