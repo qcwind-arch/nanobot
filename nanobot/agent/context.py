@@ -19,14 +19,11 @@ class ContextBuilder:
 
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md"]
     _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
-<<<<<<< HEAD
     MAX_INLINE_IMAGES = 1
     MAX_INLINE_IMAGE_BYTES = 64 * 1024
-=======
     _MAX_RECENT_HISTORY = 50
     _RUNTIME_CONTEXT_END = "[/Runtime Context]"
 
->>>>>>> upstream/main
     def __init__(self, workspace: Path, timezone: str | None = None):
         self.workspace = workspace
         self.timezone = timezone
@@ -132,11 +129,8 @@ class ContextBuilder:
         channel: str | None = None,
         chat_id: str | None = None,
         current_role: str = "user",
-<<<<<<< HEAD
         files: list[str] | None = None,
-=======
         session_summary: str | None = None,
->>>>>>> upstream/main
     ) -> list[dict[str, Any]]:
         # """Build the complete message list for an LLM call."""
 
@@ -160,22 +154,19 @@ class ContextBuilder:
             merged = f"{runtime_ctx}\n\n{user_content}"
         else:
             merged = [{"type": "text", "text": runtime_ctx}] + user_content
-<<<<<<< HEAD
 
-        context = {"role": current_role, "content": merged}# self._build_user_content(current_message, media)}
-        if(files is not None and len(files) > 0):
-            context["files"] = files
+        # context = {"role": current_role, "content": merged}# self._build_user_content(current_message, media)}
+        # if(files is not None and len(files) > 0):
+        #     context["files"] = files
 
-        return [
-            {"role": "system", "content": self.build_system_prompt(skill_names)},
-            *history,
-            {"role": current_role, "content": runtime_ctx},
-            {"role": current_role, "content": user_content},
-=======
+        # return [
+        #     {"role": "system", "content": self.build_system_prompt(skill_names)},
+        #     *history,
+        #     {"role": current_role, "content": runtime_ctx},
+        #     {"role": current_role, "content": user_content},
         messages = [
             {"role": "system", "content": self.build_system_prompt(skill_names, channel=channel)},
             *history,
->>>>>>> upstream/main
         ]
         if messages[-1].get("role") == current_role:
             last = dict(messages[-1])

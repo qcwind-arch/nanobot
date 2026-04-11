@@ -249,14 +249,9 @@ class FeishuConfig(Base):
     encrypt_key: str = ""
     verification_token: str = ""
     allow_from: list[str] = Field(default_factory=list)
-<<<<<<< HEAD
-    # react_emoji: str = "THUMBSUP"
     react_emoji: str = "THINKING"
-=======
-    react_emoji: str = "THUMBSUP"
     done_emoji: str | None = None  # Emoji to show when task is completed (e.g., "DONE", "OK")
     tool_hint_prefix: str = "\U0001f527"  # Prefix for inline tool hints (default: 🔧)
->>>>>>> upstream/main
     group_policy: Literal["open", "mention"] = "mention"
     reply_to_message: bool = False  # If True, bot replies quote the user's original message
     streaming: bool = True
@@ -1561,16 +1556,9 @@ class FeishuChannel(BaseChannel):
                     content_parts.append(content_text)
 
             elif msg_type in ("image", "audio", "file", "media"):
-<<<<<<< HEAD
                 file_path, content_text = await self._download_and_save_media(msg_type, content_json, message_id)
-                print(f'file_path: {file_path}, content_text: {content_text}')
+                # print(f'file_path: {file_path}, content_text: {content_text}')
                 if msg_type!="image" and file_path:
-=======
-                file_path, content_text = await self._download_and_save_media(
-                    msg_type, content_json, message_id
-                )
-                if file_path:
->>>>>>> upstream/main
                     media_paths.append(file_path)
 
                 if msg_type == "audio" and file_path:

@@ -614,27 +614,24 @@ class AgentLoop:
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
 
-<<<<<<< HEAD
-        history = session.get_history(max_messages=0)#max_messages=self.memory_window)
-        # files = msg.downloaded_images
-        # Step 1: Extract downloaded_images with explicit checks (add debug logs)
-        # Get metadata (handle both dict and object cases)
-        metadata = msg.metadata if hasattr(msg, "metadata") else {}
-        # Convert metadata to dict if it's an object (common in SDKs)
-        metadata_dict = vars(metadata) if not isinstance(metadata, dict) else metadata
+        # history = session.get_history(max_messages=0)#max_messages=self.memory_window)
+        # # files = msg.downloaded_images
+        # # Step 1: Extract downloaded_images with explicit checks (add debug logs)
+        # # Get metadata (handle both dict and object cases)
+        # metadata = msg.metadata if hasattr(msg, "metadata") else {}
+        # # Convert metadata to dict if it's an object (common in SDKs)
+        # metadata_dict = vars(metadata) if not isinstance(metadata, dict) else metadata
 
-        # Extract downloaded_images (fallback to empty list instead of None)
-        downloaded_images = metadata_dict.get("downloaded_images", [])
-        logger.debug(f"downloaded_images raw value: {downloaded_images}")  # Debug log
+        # # Extract downloaded_images (fallback to empty list instead of None)
+        # downloaded_images = metadata_dict.get("downloaded_images", [])
+        # logger.debug(f"downloaded_images raw value: {downloaded_images}")  # Debug log
 
-        # Step 2: Sanitize the files parameter (ensure it's a list of valid paths)
-        files = []
-        if downloaded_images and isinstance(downloaded_images, list):
-            # Filter out empty/invalid paths (e.g., "", None, broken paths)
-            files = [path for path in downloaded_images if path and isinstance(path, str)]
-=======
+        # # Step 2: Sanitize the files parameter (ensure it's a list of valid paths)
+        # files = []
+        # if downloaded_images and isinstance(downloaded_images, list):
+        #     # Filter out empty/invalid paths (e.g., "", None, broken paths)
+        #     files = [path for path in downloaded_images if path and isinstance(path, str)]
         history = session.get_history(max_messages=0)
->>>>>>> upstream/main
 
         initial_messages = self.context.build_messages(
             history=history,
