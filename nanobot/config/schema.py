@@ -77,6 +77,7 @@ class AgentDefaults(Base):
     reasoning_effort: str | None = None  # low / medium / high / adaptive - enables LLM thinking mode
     timezone: str = "UTC"  # IANA timezone, e.g. "Asia/Shanghai", "America/New_York"
     unified_session: bool = False  # Share one session across all channels (single-user multi-device)
+    disabled_skills: list[str] = Field(default_factory=list)  # Skill names to exclude from loading (e.g. ["summarize", "skill-creator"])
     session_ttl_minutes: int = Field(
         default=0,
         ge=0,
@@ -159,7 +160,7 @@ class GatewayConfig(Base):
 class WebSearchConfig(Base):
     """Web search tool configuration."""
 
-    provider: str = "duckduckgo"  # brave, tavily, duckduckgo, searxng, jina
+    provider: str = "duckduckgo"  # brave, tavily, duckduckgo, searxng, jina, kagi
     api_key: str = ""
     base_url: str = ""  # SearXNG base URL
     max_results: int = 5
