@@ -1,9 +1,24 @@
 # Project-specific
 .worktrees/
+.worktree/
 .assets
 .docs
 .env
 .web
+.orion
+nanobot-desktop/
+desktop/
+
+# Claude / AI assistant artifacts
+docs/superpowers/
+docs/plans/
+
+# webui (monorepo frontend)
+webui/node_modules/
+webui/dist/
+webui/coverage/
+webui/.vite/
+*.tsbuildinfo
 
 # Python bytecode & caches
 *.pyc
@@ -93,4 +108,9 @@ logs/
 tmp/
 temp/
 *.tmp
+<<<<<<< HEAD
+>>>>>>> upstream/main
+=======
+exp/
+.playwright-mcp/
 >>>>>>> upstream/main
