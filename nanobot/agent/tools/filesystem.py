@@ -18,7 +18,6 @@ from nanobot.agent.tools.schema import (
     tool_parameters_schema,
 )
 from nanobot.utils.helpers import build_image_content_blocks, detect_image_mime
-<<<<<<< HEAD
 from nanobot.config.paths import get_media_dir
 
 
@@ -93,8 +92,6 @@ def _is_under(path: Path, directory: Path) -> bool:
         return True
     except ValueError:
         return False
-=======
->>>>>>> upstream/main
 
 
 class _FsTool(Tool):

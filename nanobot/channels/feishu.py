@@ -1425,11 +1425,7 @@ class FeishuChannel(BaseChannel):
                 if self.config.done_emoji:
                     await self._add_reaction(message_id, self.config.done_emoji)
 
-<<<<<<< HEAD
-            buf = self._stream_bufs.pop(chat_id, None)
-=======
             buf = self._stream_bufs.pop(stream_key, None)
->>>>>>> upstream/main
             if not buf or not buf.text:
                 return
             # Try to finalize via streaming card; if that fails (e.g.
@@ -1446,8 +1442,6 @@ class FeishuChannel(BaseChannel):
                 )
                 if ok:
                     buf.sequence += 1
-<<<<<<< HEAD
-=======
                     await loop.run_in_executor(
                         None,
                         self._close_streaming_mode_sync,
@@ -1477,7 +1471,6 @@ class FeishuChannel(BaseChannel):
                         ),
                     )
                 else:
->>>>>>> upstream/main
                     await loop.run_in_executor(
                         None,
                         self._close_streaming_mode_sync,
@@ -1565,25 +1558,14 @@ class FeishuChannel(BaseChannel):
                         "\n\n" + self._format_tool_hint_delta(hint) + "\n\n",
                     )
                     return
-<<<<<<< HEAD
-                # No active streaming card — send as a regular
-                # interactive card with the same 🔧 prefix style.
-=======
                 # No active streaming card — send as a regular interactive card
                 # with the same 🔧 prefix style. Existing topics stay threaded;
                 # new topics are created only when reply-to-message is enabled.
->>>>>>> upstream/main
                 card = json.dumps(
                     {"config": {"wide_screen_mode": True}, "elements": [
                         {"tag": "markdown", "content": self._format_tool_hint_delta(hint)},
                     ]},
                     ensure_ascii=False,
-<<<<<<< HEAD
-                )
-                await loop.run_in_executor(
-                    None, self._send_message_sync, receive_id_type, msg.chat_id, "interactive", card
-=======
->>>>>>> upstream/main
                 )
                 _th_msg_id = self._thread_reply_target(msg.metadata)
                 if _th_msg_id:

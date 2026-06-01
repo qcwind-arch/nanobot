@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from nanobot.agent.tools.base import Tool
+from nanobot.agent.tools.context import RequestContext
 
 
 class UserTool(Tool):
@@ -16,11 +17,11 @@ class UserTool(Tool):
         self._chat_id: str = ""
         self._sender_id: str = ""
 
-    def set_context(self, channel: str, chat_id: str, sender_id: str | None = None) -> None:
+    def set_context(self, ctx: RequestContext) -> None:
         """Set the current session context."""
-        self._channel = channel
-        self._chat_id = chat_id
-        self._sender_id = sender_id or ""
+        self._channel = ctx.channel
+        self._chat_id = ctx.chat_id
+        self._sender_id = ctx.sender_id or ""
 
     @property
     def name(self) -> str:

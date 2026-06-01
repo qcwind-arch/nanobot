@@ -575,7 +575,6 @@ class SessionManager:
         """Remove a session from the in-memory cache."""
         self._cache.pop(key, None)
 
-<<<<<<< HEAD
     def delete(self, key: str) -> bool:
         """
         Delete a session.
@@ -594,7 +593,6 @@ class SessionManager:
             return True
         return False
     
-=======
     def delete_session(self, key: str) -> bool:
         """Remove a session from disk and the in-memory cache.
 
@@ -654,7 +652,6 @@ class SessionManager:
                 return self._session_payload(repaired)
             return None
 
->>>>>>> upstream/main
     def list_sessions(self) -> list[dict[str, Any]]:
         """
         List all sessions.

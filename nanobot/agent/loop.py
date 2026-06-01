@@ -27,15 +27,12 @@ from nanobot.agent.tools.context import RequestContext, bind_request_context, re
 from nanobot.agent.tools.file_state import FileStateStore, bind_file_states, reset_file_states
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
-<<<<<<< HEAD
-from nanobot.agent.tools.search import GlobTool, GrepTool
+# from nanobot.agent.tools.search import GlobTool, GrepTool
 from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.spawn import SpawnTool
 from nanobot.agent.tools.user import UserTool
 from nanobot.agent.tools.web import WebFetchTool, WebSearchTool
-=======
 from nanobot.agent.tools.self import MyTool
->>>>>>> upstream/main
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.command import CommandContext, CommandRouter, register_builtin_commands
@@ -495,30 +492,7 @@ class AgentLoop:
         # MyTool needs runtime state reference — manual registration
         if self.tools_config.my.enable:
             self.tools.register(
-<<<<<<< HEAD
-                ExecTool(
-                    working_dir=str(self.workspace),
-                    timeout=self.exec_config.timeout,
-                    restrict_to_workspace=self.restrict_to_workspace,
-                    sandbox=self.exec_config.sandbox,
-                    path_append=self.exec_config.path_append,
-                    allowed_env_keys=self.exec_config.allowed_env_keys,
-                )
-            )
-        if self.web_config.enable:
-            self.tools.register(
-                WebSearchTool(config=self.web_config.search, proxy=self.web_config.proxy)
-            )
-            self.tools.register(WebFetchTool(proxy=self.web_config.proxy))
-        self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
-        self.tools.register(SpawnTool(manager=self.subagents))
-        self.tools.register(UserTool())
-        if self.cron_service:
-            self.tools.register(
-                CronTool(self.cron_service, default_timezone=self.context.timezone or "UTC")
-=======
                 MyTool(runtime_state=self, modify_allowed=self.tools_config.my.allow_set)
->>>>>>> upstream/main
             )
             registered.append("my")
 
@@ -528,50 +502,10 @@ class AgentLoop:
         """Connect configured MCP servers."""
         await agent_context.connect_mcp(self, self.tools)
 
-<<<<<<< HEAD
-        try:
-            self._mcp_stacks = await connect_mcp_servers(self._mcp_servers, self.tools)
-            if self._mcp_stacks:
-                self._mcp_connected = True
-            else:
-                logger.warning("No MCP servers connected successfully (will retry next message)")
-        except asyncio.CancelledError:
-            logger.warning("MCP connection cancelled (will retry next message)")
-            self._mcp_stacks.clear()
-        except BaseException as e:
-            logger.error("Failed to connect MCP servers (will retry next message): {}", e)
-            self._mcp_stacks.clear()
-        finally:
-            self._mcp_connecting = False
-
-    def _set_tool_context(
-        self,
-        channel: str,
-        chat_id: str,
-        message_id: str | None = None,
-        sender_id: str | None = None,
-    ) -> None:
-        """Update context for all tools that need routing info."""
-        # Message tool needs channel/chat_id/message_id
-        if tool := self.tools.get("message"):
-            if hasattr(tool, "set_context"):
-                tool.set_context(channel, chat_id, message_id)
-
-        # Spawn/cron tools need channel/chat_id for where to send follow-ups
-        for name in ("spawn", "cron"):
-            if tool := self.tools.get(name):
-                if hasattr(tool, "set_context"):
-                    tool.set_context(channel, chat_id)
-
-        # User tool needs channel/chat_id/sender_id to expose user identifiers (e.g. Feishu open_id)
-        if tool := self.tools.get("user"):
-            if hasattr(tool, "set_context"):
-                tool.set_context(channel, chat_id, sender_id)
-=======
     def _set_tool_context(
         self, channel: str, chat_id: str,
         message_id: str | None = None, metadata: dict | None = None,
-        session_key: str | None = None,
+        session_key: str | None = None, sender_id: str | None = None,
     ) -> None:
         """Update context for all tools that need routing info."""
         from nanobot.agent.tools.context import ContextAware
@@ -588,6 +522,7 @@ class AgentLoop:
             chat_id=chat_id,
             message_id=message_id,
             session_key=effective_key,
+            sender_id=sender_id,
             metadata=dict(metadata or {}),
         )
 
@@ -595,7 +530,6 @@ class AgentLoop:
             tool = self.tools.get(name)
             if tool and isinstance(tool, ContextAware):
                 tool.set_context(request_ctx)
->>>>>>> upstream/main
 
     @staticmethod
     def _runtime_chat_id(msg: InboundMessage) -> str:
@@ -1146,83 +1080,6 @@ class AgentLoop:
         if pending:
             logger.info("Memory compact triggered for session {}", key)
 
-<<<<<<< HEAD
-        # Slash commands
-        cmd = msg.content.strip().lower()
-
-        if cmd == "/clear":
-            self.sessions.delete(msg.session_key)
-            logger.info(f"Session cleared for {msg.session_key}")
-            return OutboundMessage(
-                channel=msg.channel,
-                chat_id=msg.chat_id,
-                content="已清除当前会话上下文（session has been cleared）。",
-            )
-
-        if cmd =="/openid":
-            return OutboundMessage(
-                channel=msg.channel,
-                chat_id=msg.chat_id,
-                content=f"{msg.sender_id}",
-            )
-            
-        if cmd == "/new":
-            snapshot = session.messages[session.last_consolidated:]
-            session.clear()
-            self.sessions.save(session)
-            self.sessions.invalidate(session.key)
-
-            if snapshot:
-                self._schedule_background(self.memory_consolidator.archive_messages(snapshot))
-
-            return OutboundMessage(channel=msg.channel, chat_id=msg.chat_id,
-                                  content="New session started.")
-        if cmd == "/help":
-            lines = [
-                "🐈 nanobot commands:",
-                "/new — Start a new conversation",
-                "/clear — Clear the current contexts",
-                "/stop — Stop the current task",
-                "/restart — Restart the bot",
-                "/help — Show available commands",
-            ]
-            return OutboundMessage(
-                channel=msg.channel, chat_id=msg.chat_id, content="\n".join(lines),
-            )
-        raw = msg.content.strip()
-        ctx = CommandContext(msg=msg, session=session, key=key, raw=raw, loop=self)
-        if result := await self.commands.dispatch(ctx):
-            return result
-
-        await self.consolidator.maybe_consolidate_by_tokens(session)
-
-        # Normal inbound messages: sender_id is the current end user id (e.g. Feishu open_id)
-        self._set_tool_context(msg.channel, msg.chat_id, msg.metadata.get("message_id"), msg.sender_id)
-        if message_tool := self.tools.get("message"):
-            if isinstance(message_tool, MessageTool):
-                message_tool.start_turn()
-
-        # history = session.get_history(max_messages=0)#max_messages=self.memory_window)
-        # # files = msg.downloaded_images
-        # # Step 1: Extract downloaded_images with explicit checks (add debug logs)
-        # # Get metadata (handle both dict and object cases)
-        # metadata = msg.metadata if hasattr(msg, "metadata") else {}
-        # # Convert metadata to dict if it's an object (common in SDKs)
-        # metadata_dict = vars(metadata) if not isinstance(metadata, dict) else metadata
-
-        # # Extract downloaded_images (fallback to empty list instead of None)
-        # downloaded_images = metadata_dict.get("downloaded_images", [])
-        # logger.debug(f"downloaded_images raw value: {downloaded_images}")  # Debug log
-
-        # # Step 2: Sanitize the files parameter (ensure it's a list of valid paths)
-        # files = []
-        # if downloaded_images and isinstance(downloaded_images, list):
-        #     # Filter out empty/invalid paths (e.g., "", None, broken paths)
-        #     files = [path for path in downloaded_images if path and isinstance(path, str)]
-        history = session.get_history(max_messages=0)
-
-        initial_messages = self.context.build_messages(
-=======
         await self.consolidator.maybe_consolidate_by_tokens(
             session,
             replay_max_messages=self._max_messages,
@@ -1233,7 +1090,7 @@ class AgentLoop:
             self.sessions.save(session)
         self._set_tool_context(
             channel, chat_id, msg.metadata.get("message_id"),
-            msg.metadata, session_key=key,
+            msg.metadata, session_key=key, sender_id=msg.sender_id,
         )
         _hist_kwargs: dict[str, Any] = {
             "max_messages": self._max_messages,
@@ -1245,7 +1102,6 @@ class AgentLoop:
         workspace_scope = self.workspace_scopes.for_message(msg, session.metadata)
 
         messages = self.context.build_messages(
->>>>>>> upstream/main
             history=history,
             current_message="" if is_subagent else msg.content,
             channel=channel,
@@ -1493,6 +1349,7 @@ class AgentLoop:
             ctx.msg.metadata.get("message_id"),
             ctx.msg.metadata,
             session_key=ctx.session_key,
+            sender_id=ctx.msg.sender_id,
         )
         if message_tool := self.tools.get("message"):
             if isinstance(message_tool, MessageTool):

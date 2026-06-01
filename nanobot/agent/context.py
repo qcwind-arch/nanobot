@@ -92,13 +92,7 @@ class ContextBuilder:
             if always_content:
                 parts.append(f"# Active Skills\n\n{always_content}")
 
-<<<<<<< HEAD
-        skills_summary = self.skills.build_skills_summary()
-        
-        # print(skills_summary)
-=======
         skills_summary = self.skills.build_skills_summary(exclude=set(always_skills))
->>>>>>> upstream/main
         if skills_summary:
             parts.append(render_template("agent/skills_section.md", skills_summary=skills_summary))
 
@@ -193,11 +187,8 @@ class ContextBuilder:
         channel: str | None = None,
         chat_id: str | None = None,
         current_role: str = "user",
-<<<<<<< HEAD
         files: list[str] | None = None,
-=======
         sender_id: str | None = None,
->>>>>>> upstream/main
         session_summary: str | None = None,
         session_metadata: Mapping[str, Any] | None = None,
         current_runtime_lines: Sequence[str] | None = None,
@@ -243,21 +234,7 @@ class ContextBuilder:
         if isinstance(user_content, str):
             merged = f"{user_content}\n\n{runtime_ctx}"
         else:
-<<<<<<< HEAD
-            merged = [{"type": "text", "text": runtime_ctx}] + user_content
-
-        # context = {"role": current_role, "content": merged}# self._build_user_content(current_message, media)}
-        # if(files is not None and len(files) > 0):
-        #     context["files"] = files
-
-        # return [
-        #     {"role": "system", "content": self.build_system_prompt(skill_names)},
-        #     *history,
-        #     {"role": current_role, "content": runtime_ctx},
-        #     {"role": current_role, "content": user_content},
-=======
             merged = user_content + [{"type": "text", "text": runtime_ctx}]
->>>>>>> upstream/main
         messages = [
             {
                 "role": "system",
@@ -290,16 +267,13 @@ class ContextBuilder:
             mime, _ = mimetypes.guess_type(path)
             if not p.is_file() or not mime or not mime.startswith("image/"):
                 continue
-<<<<<<< HEAD
             try:
                 size = p.stat().st_size
             except OSError:
                 omitted.append(f"[image omitted: {p.name} - stat failed]")
-=======
             raw = p.read_bytes()
             mime = detect_image_mime(raw) or mimetypes.guess_type(path)[0]
             if not mime or not mime.startswith("image/"):
->>>>>>> upstream/main
                 continue
 
             if len(images) >= self.MAX_INLINE_IMAGES:
@@ -325,56 +299,3 @@ class ContextBuilder:
         if not images:
             return text
         return images + [{"type": "text", "text": text}]
-<<<<<<< HEAD
-    # def _build_user_content(self, text: str, media: list[str] | None) -> str | list[dict[str, Any]]:
-    #     """Build user message content with optional base64-encoded images."""
-    #     if not media:
-    #         return text
-
-    #     images = []
-    #     omitted: list[str] = []
-    #     for path in media:
-    #         p = Path(path)
-    #         if not p.is_file():
-    #             continue
-    #         raw = p.read_bytes()
-    #         # Detect real MIME type from magic bytes; fallback to filename guess
-    #         mime = detect_image_mime(raw) or mimetypes.guess_type(path)[0]
-    #         if not mime or not mime.startswith("image/"):
-    #             continue
-    #         b64 = base64.b64encode(raw).decode()
-    #         images.append({
-    #             "type": "image_url",
-    #             "image_url": {"url": f"data:{mime};base64,{b64}"},
-    #             "_meta": {"path": str(p)},
-    #         })
-
-    #     if not images:
-    #         return text
-    #     return images + [{"type": "text", "text": text}]
-
-    def add_tool_result(
-        self, messages: list[dict[str, Any]],
-        tool_call_id: str, tool_name: str, result: Any,
-    ) -> list[dict[str, Any]]:
-        """Add a tool result to the message list."""
-        messages.append({"role": "tool", "tool_call_id": tool_call_id, "name": tool_name, "content": result})
-        return messages
-
-    def add_assistant_message(
-        self, messages: list[dict[str, Any]],
-        content: str | None,
-        tool_calls: list[dict[str, Any]] | None = None,
-        reasoning_content: str | None = None,
-        thinking_blocks: list[dict] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Add an assistant message to the message list."""
-        messages.append(build_assistant_message(
-            content,
-            tool_calls=tool_calls,
-            reasoning_content=reasoning_content,
-            thinking_blocks=thinking_blocks,
-        ))
-        return messages
-=======
->>>>>>> upstream/main
