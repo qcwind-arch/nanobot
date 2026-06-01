@@ -74,6 +74,12 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "[n]",
     ),
     BuiltinCommandSpec(
+        "/clear",
+        "Clear session history",
+        "Delete all conversation history for this chat.",
+        "trash-2",
+    ),
+    BuiltinCommandSpec(
         "/goal",
         "Start long-running goal",
         "Tell the agent to treat the request as a long-running goal.",
@@ -554,6 +560,29 @@ async def cmd_history(ctx: CommandContext) -> OutboundMessage:
     )
 
 
+async def cmd_clear(ctx: CommandContext) -> OutboundMessage:
+    """Delete the session history file and clear the session from memory."""
+    loop = ctx.loop
+    key = ctx.key
+    
+    deleted = loop.sessions.delete_session(key)
+    
+    if deleted:
+        return OutboundMessage(
+            channel=ctx.msg.channel,
+            chat_id=ctx.msg.chat_id,
+            content="Session history cleared. Starting fresh.",
+            metadata=dict(ctx.msg.metadata or {}),
+        )
+    else:
+        return OutboundMessage(
+            channel=ctx.msg.channel,
+            chat_id=ctx.msg.chat_id,
+            content="No session history to clear.",
+            metadata=dict(ctx.msg.metadata or {}),
+        )
+
+
 _GOAL_PROMPT_TEMPLATE = """The user declared a sustained objective for this thread.
 
 Inspect or clarify if needed, then call `long_task` with the refined objective (and optional short ui_summary). Work proceeds as normal assistant turns using your usual tools. When the objective is fully done and verified, call `complete_goal` with a brief recap. If the user later cancels or changes direction, still call `complete_goal` with an honest recap (then `long_task` again only after there is no active goal). Do not use `long_task` / `complete_goal` for trivial one-shot answers.
@@ -632,13 +661,13 @@ def register_builtin_commands(router: CommandRouter) -> None:
     """Register the default set of slash commands."""
     router.priority("/stop", cmd_stop)
     router.priority("/restart", cmd_restart)
-    router.priority("/status", cmd_status)
     router.exact("/new", cmd_new)
     router.exact("/status", cmd_status)
     router.exact("/model", cmd_model)
     router.prefix("/model ", cmd_model)
     router.exact("/history", cmd_history)
     router.prefix("/history ", cmd_history)
+    router.exact("/clear", cmd_clear)
     router.exact("/goal", cmd_goal)
     router.prefix("/goal ", cmd_goal)
     router.exact("/dream", cmd_dream)
