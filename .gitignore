@@ -6,8 +6,6 @@
 .env
 .web
 .orion
-nanobot-desktop/
-desktop/
 
 # Claude / AI assistant artifacts
 docs/superpowers/
@@ -30,12 +28,7 @@ __pycache__/
 *.egg-info/
 *.egg
 .venv/
-<<<<<<< HEAD
-__pycache__/
-poetry.lock
-=======
 venv/
->>>>>>> upstream/main
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -108,9 +101,6 @@ logs/
 tmp/
 temp/
 *.tmp
-<<<<<<< HEAD
->>>>>>> upstream/main
-=======
 exp/
 .playwright-mcp/
->>>>>>> upstream/main
+bridge/node_modules/

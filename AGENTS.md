@@ -1,165 +1,81 @@
-# Agent Development Guide
+This file provides guidance to AI coding agents working with this repository.
 
-This file contains build/lint/test commands and code style guidelines for working with nanobot.
+## Project Overview
 
-## Commands
+nanobot is a lightweight, open-source AI agent framework written in Python with a React/TypeScript WebUI. It centers around a small agent loop that receives messages from chat channels, invokes an LLM provider, executes tools, and manages session memory.
 
-### Testing
+## Development Commands
+
 ```bash
-# Install dev dependencies
-pip install -e ".[dev]"
+# Python: run single test / lint
+pytest tests/test_openai_api.py::test_function -v
+ruff check nanobot/
 
-# Run all tests
-pytest tests/
+# WebUI: dev server (proxies API/WS to gateway :8765), build, test
+# Build outputs to ../nanobot/web/dist (bundled into the Python wheel)
+cd webui && bun run dev      # or NANOBOT_API_URL=... bun run dev
+cd webui && bun run build
+cd webui && bun run test
 
-# Run a single test file
-pytest tests/test_tool_validation.py
-
-# Run a specific test function
-pytest tests/test_tool_validation.py::test_validate_params_missing_required
-
-# Run with verbose output
-pytest -v
-
-# Run async tests only
-pytest -m asyncio
+# Gateway
+nanobot gateway
 ```
 
-### Linting & Type Checking
-```bash
-# Run ruff linter
-ruff check nanobot/ tests/
+## High-Level Architecture
 
-# Auto-fix ruff issues
-ruff check --fix nanobot/ tests/
+### Core Data Flow
 
-# Check code formatting
-ruff format --check nanobot/ tests/
+Messages flow through an async `MessageBus` (`nanobot/bus/queue.py`) that decouples chat channels from the agent core:
 
-# Auto-format code
-ruff format nanobot/ tests/
-```
+1. **Channels** (`nanobot/channels/`) receive messages from external platforms and publish `InboundMessage` events to the bus.
+2. **`AgentLoop`** (`nanobot/agent/loop.py`) consumes inbound messages, builds context, and coordinates the turn.
+3. **`AgentRunner`** (`nanobot/agent/runner.py`) handles the actual LLM conversation loop: send messages to the provider, receive tool calls, execute tools, and stream responses.
+4. Responses are published as `OutboundMessage` events back to the appropriate channel.
 
-### Build
-```bash
-# Build package
-pip install build
-python -m build
+### Key Subsystems
 
-# Install from source
-pip install -e .
-```
+- **Agent Loop** (`nanobot/agent/loop.py`, `runner.py`): The core processing engine. `AgentLoop` manages session keys, hooks, and context building. `AgentRunner` executes the multi-turn LLM conversation with tool execution.
+- **LLM Providers** (`nanobot/providers/`): Provider implementations (Anthropic, OpenAI-compatible, OpenAI Responses API, Azure, Bedrock, GitHub Copilot, OpenAI Codex, etc.) built on a common base (`base.py`). Includes image generation (`image_generation.py`) and audio transcription (`transcription.py`). `factory.py` and `registry.py` handle instantiation and model discovery.
+- **Channels** (`nanobot/channels/`): Platform integrations (Telegram, Discord, Slack, Feishu, Matrix, WhatsApp, QQ, WeChat, WeCom, DingTalk, Email, MoChat, MS Teams, WebSocket, Mattermost). `manager.py` discovers and coordinates them. Channels are self-contained packages auto-discovered via `pkgutil` scanning.
+- **Tools** (`nanobot/agent/tools/`): Agent capabilities exposed to the LLM: filesystem (read/write/edit/list), shell execution (with sandbox backends), web search/fetch, MCP servers, cron, notebook editing, subagent spawning, long-running tasks / sustained goals (`long_task.py`), image generation, and self-modification. Tools are auto-discovered via `pkgutil` scan + entry-point plugins.
+- **Memory** (`nanobot/agent/memory.py`): Session history persistence with Dream two-phase memory consolidation. Uses atomic writes with fsync for durability.
+- **Session Management** (`nanobot/session/`): Per-session history, context compaction, TTL-based auto-compaction (`manager.py`), and sustained goal state tracking (`goal_state.py`).
+- **Config** (`nanobot/config/schema.py`, `loader.py`): Pydantic-based configuration loaded from `~/.nanobot/config.json`. Supports camelCase aliases for JSON compatibility.
+- **WebUI** (`webui/`): Vite-based React SPA that talks to the gateway over a WebSocket multiplex protocol. The dev server proxies `/api`, `/webui`, `/auth`, and WebSocket traffic to the gateway.
+- **API Server** (`nanobot/api/server.py`): OpenAI-compatible HTTP API (`/v1/chat/completions`, `/v1/models`) for programmatic access.
+- **Command Router** (`nanobot/command/`): Slash command routing and built-in command handlers.
+- **Heartbeat** (`nanobot/templates/HEARTBEAT.md`): Periodic task list checked via `cron` jobs (legacy dedicated service removed).
+- **Pairing** (`nanobot/pairing/`): DM sender approval store with persistent pairing codes per channel.
+- **Skills** (`nanobot/skills/`): Built-in skill definitions (cron, github, image-generation, etc.) loaded into agent context.
+- **Security** (`nanobot/security/`): PTH file guard and other security measures activated at CLI entry.
 
-## Code Style Guidelines
+### Entry Points
 
-### Imports
-- Order: stdlib → third-party → local (alphabetically sorted within each group)
-- Use `from __future__ import annotations` for files with forward type hints
-- Type-level imports use TYPE_CHECKING guard for runtime efficiency
+- **CLI**: `nanobot/cli/commands.py`
+- **Python SDK**: `nanobot/nanobot.py`
 
-Example:
-```python
-from __future__ import annotations
+## Project-Specific Notes
 
-import asyncio
-from pathlib import Path
-from typing import TYPE_CHECKING
+- Architecture constraints: [`.agent/design.md`](.agent/design.md)
+- Security boundaries: [`.agent/security.md`](.agent/security.md)
+- Common gotchas: [`.agent/gotchas.md`](.agent/gotchas.md)
 
-from loguru import logger
-from pydantic import BaseModel
+## Contribution Flow
 
-from nanobot.config.schema import SomeConfig
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution flow and PR guidelines.
 
-if TYPE_CHECKING:
-    from nanobot.session.manager import SessionManager
-```
+## Code Style
 
-### Type Hints
-- Use type hints for all function signatures and class attributes
-- Prefer `str | None` over `Optional[str]` (Python 3.11+ style)
-- Use `dict[str, Any]`, `list[str]` instead of `Dict`, `List`
-- Dataclasses use `@dataclass(frozen=True)` for immutability
+- Python 3.11+, asyncio throughout.
+- Line length: 100.
+- Linting: `ruff` with rules E, F, I, N, W (E501 ignored).
+- pytest with `asyncio_mode = "auto"`.
 
-### Naming Conventions
-- Classes: PascalCase (`AgentLoop`, `ToolRegistry`)
-- Functions/variables: snake_case (`process_message`, `allowed_dir`)
-- Constants: UPPER_SNAKE_CASE (`BOOTSTRAP_FILES`, `MAX_ITERATIONS`)
-- Private attributes: leading underscore (`_running`, `_register_default_tools`)
-- Async functions: explicitly named with async behavior (`run`, `process_message`)
+## Common File Locations
 
-### Formatting
-- Max line length: 100 characters (configured in pyproject.toml)
-- Use 4 spaces for indentation
-- No trailing whitespace
-- One blank line between top-level definitions (two between classes)
-- Use f-strings for string formatting: `f"Processing: {value}"`
-
-### Error Handling
-- Log errors with loguru: `logger.error(f"Error: {e}")`
-- Use try/except with specific exceptions when possible
-- Return error messages as strings for tools (agents read them)
-- Raise ValueError for invalid parameters, RuntimeError for operational issues
-
-### Logging
-- Use loguru logger: `from loguru import logger`
-- Levels: `logger.debug()`, `logger.info()`, `logger.warning()`, `logger.error()`
-- Include context in messages: `logger.info(f"Processing {msg.session_key}: {preview}")`
-
-### Classes & Data Structures
-- Use Pydantic `BaseModel` for configuration and data validation
-- Use `Field(default_factory=list)` for mutable defaults
-- Use `@dataclass(frozen=True)` for simple immutable structures
-- Include docstrings for classes and public methods
-
-Example:
-```python
-from pydantic import BaseModel, Field
-
-class SomeConfig(BaseModel):
-    """Configuration for something."""
-    enabled: bool = False
-    items: list[str] = Field(default_factory=list)
-    timeout: int = 30
-```
-
-### Async Patterns
-- Always use `async def` for I/O operations
-- Use `await` for async calls (no asyncio.run() inside async functions)
-- Use `@pytest.mark.asyncio` for async tests
-- Handle cancellation gracefully
-
-### Docstrings
-- Use triple-quoted strings at module/class/function level
-- Keep descriptions concise but informative
-- Args/Returns sections for complex functions
-
-### Tool Development
-- Inherit from `Tool` base class in `nanobot/agent/tools/base.py`
-- Override `name`, `description`, `parameters`, and `execute`
-- Execute returns string result (agent reads this)
-- Use `validate_params()` for parameter validation
-
-Example:
-```python
-class CustomTool(Tool):
-    @property
-    def name(self) -> str:
-        return "custom_tool"
-
-    @property
-    def description(self) -> str:
-        return "Does something custom"
-
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return {"type": "object", "properties": {"query": {"type": "string"}}}
-
-    async def execute(self, **kwargs: Any) -> str:
-        return "Result"
-```
-
-### Channel Development
-- Inherit from `BaseChannel` in `nanobot/channels/base.py`
-- Use `MessageBus.publish_inbound()` for incoming messages
-- Handle `OutboundMessage` from the bus to send replies
-- Use loguru for connection status logging
+- Config schema: `nanobot/config/schema.py`
+- Provider base / new provider template: `nanobot/providers/base.py`
+- Channel base / new channel template: `nanobot/channels/base.py`
+- Tool registry: `nanobot/agent/tools/registry.py`
+- WebUI dev proxy config: `webui/vite.config.ts`
+- Tests mirror the `nanobot/` package structure.
