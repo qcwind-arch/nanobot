@@ -25,9 +25,11 @@ from nanobot.session.manager import (
     _message_preview_text,
     _metadata_title,
 )
+from nanobot.session.model_selection import model_preset_from_metadata
 
-_INDEX_VERSION = 2
+_INDEX_VERSION = 4
 _INDEX_FILENAME = ".webui_session_index.json"
+_MODEL_PRESET_FIELD = "model_preset"
 _WEBUI_ACTIVITY_MTIME_NS = "webui_activity_mtime_ns"
 _WEBUI_ACTIVITY_SIZE = "webui_activity_size"
 _VISIBLE_TRANSCRIPT_ROLES = {"user", "assistant"}
@@ -52,7 +54,11 @@ def _reconcile_index(session_manager: SessionManager) -> tuple[list[dict[str, An
         for row in existing_rows or []
         if isinstance(row.get("file"), str)
     }
-    paths = sorted(session_manager.sessions_dir.glob("*.jsonl"))
+    paths = sorted(
+        path
+        for path in session_manager.sessions_dir.glob("*.jsonl")
+        if SessionManager._session_key_from_path(path) is not None
+    )
     rows: list[dict[str, Any]] = []
     changed = existing_rows is None
 
@@ -138,6 +144,7 @@ def _public_row(sessions_dir: Path, row: dict[str, Any]) -> dict[str, Any]:
         "updated_at": row.get("updated_at"),
         "title": row.get("title", ""),
         "preview": row.get("preview", ""),
+        _MODEL_PRESET_FIELD: row.get(_MODEL_PRESET_FIELD),
         "path": str(sessions_dir / str(row.get("file", ""))),
     }
 
@@ -256,6 +263,7 @@ def _indexed_row_for_session(session: Session, path: Path) -> dict[str, Any]:
         ),
         "title": _metadata_title(session.metadata),
         "preview": _preview_from_messages(session.messages),
+        _MODEL_PRESET_FIELD: model_preset_from_metadata(session.metadata),
         "file": path.name,
         "mtime_ns": signature["mtime_ns"],
         "size": signature["size"],
@@ -264,8 +272,9 @@ def _indexed_row_for_session(session: Session, path: Path) -> dict[str, Any]:
 
 
 def _scan_session_row(session_manager: SessionManager, path: Path) -> dict[str, Any] | None:
-    storage_key = SessionManager._decode_storage_key(path.stem)
-    fallback_key = storage_key or path.stem.replace("_", ":", 1)
+    storage_key = SessionManager._session_key_from_path(path)
+    if storage_key is None:
+        return None
     try:
         with open(path, encoding="utf-8") as f:
             first_line = f.readline().strip()
@@ -316,7 +325,7 @@ def _scan_session_row(session_manager: SessionManager, path: Path) -> dict[str, 
                 fallback_time = datetime.fromtimestamp(signature["mtime_ns"] / 1e9).isoformat()
                 created_at_s = created_at_s or fallback_time
                 updated_at_s = updated_at_s or fallback_time
-            key = data.get("key") or fallback_key
+            key = data.get("key") or storage_key
             activity_signature = _webui_activity_signature(key)
             activity_updated_at = _webui_activity_updated_at(activity_signature)
             return {
@@ -329,13 +338,14 @@ def _scan_session_row(session_manager: SessionManager, path: Path) -> dict[str, 
                 ),
                 "title": _metadata_title(data.get("metadata", {})),
                 "preview": preview or fallback_preview,
+                _MODEL_PRESET_FIELD: model_preset_from_metadata(data.get("metadata", {})),
                 "file": path.name,
                 "mtime_ns": signature["mtime_ns"],
                 "size": signature["size"],
                 **activity_signature,
             }
     except Exception:
-        repaired = session_manager._repair(fallback_key)
+        repaired = session_manager._repair(storage_key)
         if repaired is None:
             return None
         return _indexed_row_for_session(repaired, path)

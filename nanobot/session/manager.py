@@ -1,17 +1,17 @@
 """Session management for conversation history."""
 
 import base64
+import errno
 import json
 import os
 import re
-import shutil
 from collections import OrderedDict
 from contextlib import suppress
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from weakref import WeakValueDictionary
 
 from loguru import logger
@@ -42,6 +42,7 @@ _TOOL_CALL_ECHO_RE = re.compile(r'^\s*(?:generate_image|message)\([^)]*\)\s*$')
 _SESSION_PREVIEW_MAX_CHARS = 120
 _SESSION_LIST_PREVIEW_MAX_RECORDS = 200
 _SESSION_LIST_PREVIEW_MAX_CHARS = 1_000_000
+_SESSION_DATA_ERRORS = (ValueError, TypeError, AttributeError, KeyError)
 _FORK_VOLATILE_METADATA_KEYS = {
     "goal_state",
     "pending_user_turn",
@@ -136,6 +137,8 @@ class Session:
     last_consolidated: int = 0  # Number of messages already consolidated to files
 
     def __post_init__(self) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
         # An out-of-range offset (corrupt metadata) would hide all history; reset it.
         if (
             isinstance(self.last_consolidated, bool)
@@ -425,6 +428,7 @@ class SessionManager:
         # Preserve identity for sessions held by active callers without retaining idle ones.
         self._overflow_cache: WeakValueDictionary[str, Session] = WeakValueDictionary()
         self._max_cached_sessions = SESSION_CACHE_MAX_SIZE
+        self._file_cap_archiver: Callable[..., None] | None = None
 
     def _remember(self, session: Session) -> None:
         """Keep recent sessions strongly cached without duplicating live objects."""
@@ -446,6 +450,10 @@ class SessionManager:
             self._remember(session)
         return session
 
+    def set_file_cap_archiver(self, archiver: Callable[..., None]) -> None:
+        """Archive unconsolidated overflow whenever a session is persisted."""
+        self._file_cap_archiver = archiver
+
     @staticmethod
     def safe_key(key: str) -> str:
         """Public helper used by HTTP handlers to map an arbitrary key to a stable filename stem."""
@@ -465,8 +473,16 @@ class SessionManager:
             if padding != 4:
                 stem += "=" * padding
             return base64.urlsafe_b64decode(stem).decode("utf-8")
-        except Exception:
+        except _SESSION_DATA_ERRORS:
             return None
+
+    @classmethod
+    def _session_key_from_path(cls, path: Path) -> str | None:
+        """Decode a session key only from a canonical collision-resistant filename."""
+        key = cls._decode_storage_key(path.stem)
+        if key is None or cls._storage_key(key) != path.stem:
+            return None
+        return key
 
     def _get_session_path(self, key: str) -> Path:
         """Get the collision-resistant workspace path for a session."""
@@ -479,24 +495,6 @@ class SessionManager:
     def _get_legacy_session_path(self, key: str) -> Path:
         """Legacy global session path (~/.nanobot/sessions/)."""
         return self.legacy_sessions_dir / f"{self.safe_key(key)}.jsonl"
-
-    @staticmethod
-    def _stored_key_for_path(path: Path) -> str | None:
-        """Read the stored session key from a JSONL metadata row, if present."""
-        try:
-            with open(path, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    data = json.loads(line)
-                    if data.get("_type") == "metadata":
-                        stored_key = data.get("key")
-                        return stored_key if isinstance(stored_key, str) else None
-                    return None
-        except Exception:
-            return None
-        return None
 
     def get_or_create(self, key: str) -> Session:
         """
@@ -523,30 +521,6 @@ class SessionManager:
         """Load a session from disk."""
         path = self._get_session_path(key)
         if not path.exists():
-            fallback_paths = [
-                (self._get_legacy_lossy_path(key), "legacy lossy path"),
-                (self._get_legacy_session_path(key), "legacy path"),
-            ]
-            for fallback_path, description in fallback_paths:
-                if not fallback_path.exists():
-                    continue
-                stored_key = self._stored_key_for_path(fallback_path)
-                if stored_key and stored_key != key:
-                    logger.info(
-                        "Skipping migration for {} from {} because it belongs to {}",
-                        key,
-                        description,
-                        stored_key,
-                    )
-                    continue
-                try:
-                    shutil.move(str(fallback_path), str(path))
-                    logger.info("Migrated session {} from {}", key, description)
-                except Exception:
-                    logger.exception("Failed to migrate session {}", key)
-                break
-
-        if not path.exists():
             return None
 
         try:
@@ -563,6 +537,8 @@ class SessionManager:
                         continue
 
                     data = json.loads(line)
+                    if not isinstance(data, dict):
+                        raise ValueError("session records must be JSON objects")
 
                     if data.get("_type") == "metadata":
                         metadata = data.get("metadata", {})
@@ -580,7 +556,7 @@ class SessionManager:
                 metadata=metadata,
                 last_consolidated=last_consolidated
             )
-        except Exception as e:
+        except _SESSION_DATA_ERRORS as e:
             logger.warning("Failed to load session {}: {}", key, e)
             repaired = self._repair(key)
             if repaired is not None:
@@ -612,6 +588,9 @@ class SessionManager:
                     except json.JSONDecodeError:
                         skipped += 1
                         continue
+                    if not isinstance(data, dict):
+                        skipped += 1
+                        continue
 
                     if data.get("_type") == "metadata":
                         metadata = data.get("metadata", {})
@@ -639,7 +618,7 @@ class SessionManager:
                 metadata=metadata,
                 last_consolidated=last_consolidated
             )
-        except Exception as e:
+        except _SESSION_DATA_ERRORS as e:
             logger.warning("Repair failed for session {}: {}", key, e)
             return None
 
@@ -663,6 +642,14 @@ class SessionManager:
         write-back caching (e.g. rclone VFS, NFS, FUSE mounts) do not lose
         the most recent writes.
         """
+        if self._file_cap_archiver is not None:
+            session.enforce_file_cap(
+                on_archive=lambda messages: self._file_cap_archiver(
+                    messages,
+                    session_key=session.key,
+                )
+            )
+
         path = self._get_session_path(session.key)
         tmp_path = path.with_suffix(".jsonl.tmp")
 
@@ -688,12 +675,15 @@ class SessionManager:
             if fsync:
                 # fsync the directory so the rename is durable.
                 # On Windows, opening a directory with O_RDONLY raises
-                # PermissionError — skip the dir sync there (NTFS
-                # journals metadata synchronously).
+                # PermissionError; some shared filesystems allow the open but
+                # reject directory fsync with EINVAL.
                 with suppress(PermissionError):
                     fd = os.open(str(path.parent), os.O_RDONLY)
                     try:
                         os.fsync(fd)
+                    except OSError as exc:
+                        if exc.errno != errno.EINVAL:
+                            raise
                     finally:
                         os.close(fd)
         except BaseException:
@@ -856,9 +846,9 @@ class SessionManager:
                 "metadata": metadata,
                 "messages": messages,
             }
-        except Exception as e:
+        except _SESSION_DATA_ERRORS as e:
             logger.warning("Failed to read session {}: {}", key, e)
-            repaired = self._repair(key)
+            repaired = self._repair(key, path=path)
             if repaired is not None:
                 logger.info("Recovered read-only session view {} from corrupt file", key)
                 return self._session_payload(repaired)
@@ -880,6 +870,8 @@ class SessionManager:
                     if not line:
                         continue
                     data = json.loads(line)
+                    if not isinstance(data, dict):
+                        raise ValueError("session records must be JSON objects")
                     if data.get("_type") != "metadata":
                         return None
                     metadata = data.get("metadata", {})
@@ -890,9 +882,9 @@ class SessionManager:
                         "metadata": metadata if isinstance(metadata, dict) else {},
                     }
             return None
-        except Exception as e:
+        except _SESSION_DATA_ERRORS as e:
             logger.warning("Failed to read session metadata {}: {}", key, e)
-            repaired = self._repair(key)
+            repaired = self._repair(key, path=path)
             if repaired is not None:
                 logger.info("Recovered read-only session metadata {} from corrupt file", key)
                 return {
@@ -913,16 +905,19 @@ class SessionManager:
         sessions = []
 
         for path in self.sessions_dir.glob("*.jsonl"):
-            decoded = self._decode_storage_key(path.stem)
-            fallback_key = decoded or path.stem.replace("_", ":", 1)
+            storage_key = self._session_key_from_path(path)
+            if storage_key is None:
+                continue
             try:
                 # Read the metadata line and a small preview for session lists.
                 with open(path, encoding="utf-8") as f:
                     first_line = f.readline().strip()
                     if first_line:
                         data = json.loads(first_line)
+                        if not isinstance(data, dict):
+                            raise ValueError("session records must be JSON objects")
                         if data.get("_type") == "metadata":
-                            key = data.get("key") or fallback_key
+                            key = data.get("key") or storage_key
                             metadata = data.get("metadata", {})
                             title = _metadata_title(metadata)
                             preview = ""
@@ -940,6 +935,8 @@ class SessionManager:
                                 ):
                                     break
                                 item = json.loads(line)
+                                if not isinstance(item, dict):
+                                    raise ValueError("session records must be JSON objects")
                                 if item.get("_type") == "metadata":
                                     continue
                                 text = _message_preview_text(item)
@@ -962,8 +959,10 @@ class SessionManager:
                                     "path": str(path),
                                 }
                             )
-            except Exception:
-                repaired = self._repair(fallback_key, path=path)
+            except FileNotFoundError:
+                continue
+            except _SESSION_DATA_ERRORS:
+                repaired = self._repair(storage_key, path=path)
                 if repaired is not None:
                     sessions.append(
                         {
